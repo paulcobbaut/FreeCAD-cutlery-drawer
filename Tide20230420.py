@@ -61,12 +61,14 @@ def create_fork_Pad(BodyLabel, SketchLabel, PadLabel):
     Pad_obj.Label = PadLabel
     Pad_obj.AlongSketchNormal = 1
     Pad_obj.Direction = (0, 0, 1)
+    doc.getObject(SketchLabel).Visibility = False
     return Pad_obj
 
 def create_fork_Fillet(BodyLabel, FilletLabel, PadLabel):
     Fillet_obj = doc.getObject(BodyLabel).newObjectAt('PartDesign::Fillet',FilletLabel)
     Fillet_obj.Base = (doc.getObject(PadLabel),['Face9',])
     Fillet_obj.Radius = 2
+    doc.getObject(PadLabel).Visibility = False
     return Fillet_obj
 
 
