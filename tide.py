@@ -22,9 +22,8 @@ import FreeCAD as App
 import Part
 import Sketcher
 import PartDesign
-import re
 
-doc = App.newDocument("Tide20230420py")
+doc = App.newDocument("Tide")
 
 # drawer
 c_depth = 30  # The depth of a hole that holds forks, spoons, knives...
@@ -61,27 +60,30 @@ fork20_tinel = 75
 spoon13_handw = 14
 spoon13_handl = 90
 spoon13_bowlw = 30
-spoon13_bowll = 46/2
+spoon13_bowll = 46  # bowll odd number == 100% CPU for minutes
 
 spoon15_handw = 16
 spoon15_handl = 100
 spoon15_bowlw = 35
-spoon15_bowll = 56/2
+spoon15_bowll = 56  # bowll odd number == 100% CPU for minutes
 
 spoon18_handw = 18
 spoon18_handl = 120
 spoon18_bowlw = 42
-spoon18_bowll = 66/2
+spoon18_bowll = 66  # bowll odd number == 100% CPU for minutes
 
 spoon21_handw = 20
 spoon21_handl = 140
 spoon21_bowlw = 50
-spoon21_bowll = 76/2
+spoon21_bowll = 76  # bowll odd number == 100% CPU for minutes
 
 
 # creates a sketch for one fork size
-def create_fork_Sketch(BodyLabel, SketchLabel, handw, handl, tinew, tinel):
-    # create Sketch Object
+def create_fork_Sketch(label, handw, handl, tinew, tinel):
+    BodyLabel   = 'Body_'   + label
+    SketchLabel = 'Sketch_' + label
+    # create Body and Sketch Object
+    Body_obj   = doc.addObject("PartDesign::Body", BodyLabel)
     Sketch_obj = doc.getObject(BodyLabel).newObject("Sketcher::SketchObject", SketchLabel)
     # create points
     point0 = App.Vector(0,           0,           0)
@@ -104,14 +106,17 @@ def create_fork_Sketch(BodyLabel, SketchLabel, handw, handl, tinew, tinel):
     return Sketch_obj
 
 # create a sketch for one spoon size
-def create_spoon_Sketch(BodyLabel, SketchLabel, handw, handl, bowlw, bowll):
-    # create Sketch Object
+def create_spoon_Sketch(label, handw, handl, bowlw, bowll):
+    BodyLabel = 'Body_' + label
+    SketchLabel = 'Sketch_' + label
+    # create Body and Sketch Object
+    Body_obj = doc.addObject("PartDesign::Body", BodyLabel)
     Sketch_obj = doc.getObject(BodyLabel).newObject("Sketcher::SketchObject", SketchLabel)
     # create points
-    point0 = App.Vector(0,           0,           0)
-    point1 = App.Vector(handw,       0,           0)
-    point2 = App.Vector(handw,       handl + 40,       0)
-    point3 = App.Vector(0,           handl + 40,       0)
+    point0 = App.Vector(0,     0,          0)
+    point1 = App.Vector(handw, 0,          0)
+    point2 = App.Vector(handw, handl + 40, 0)
+    point3 = App.Vector(0,     handl + 40, 0)
     # create lines that kinda surround a spoon handle
     Sketch_obj.addGeometry(Part.LineSegment(point0,point1),False)
     Sketch_obj.addGeometry(Part.LineSegment(point1,point2),False)
@@ -119,19 +124,22 @@ def create_spoon_Sketch(BodyLabel, SketchLabel, handw, handl, bowlw, bowll):
     Sketch_obj.addGeometry(Part.LineSegment(point3,point0),False)
     # create an ellipse that kinda surrounds a spoon bowl
     # major axis(bottom point), minor_axis(right point), center
-    e_major  = App.Vector(handw/2           ,handl         ,0)
-    e_minor  = App.Vector(handw/2 + bowlw/2 ,handl + bowll ,0)
-    e_center = App.Vector(handw/2           ,handl + bowll ,0)
+    e_major  = App.Vector(handw/2,           handl,           0)
+    e_minor  = App.Vector(handw/2 + bowlw/2, handl + bowll/2, 0)
+    e_center = App.Vector(handw/2,           handl + bowll/2, 0)
     Sketch_obj.addGeometry(Part.Ellipse(e_major, e_minor, e_center),False)
     # trim the unneeded lines
-    Sketch_obj.trim(2,App.Vector(handw/2,handl+40,0))
-    Sketch_obj.trim(1,App.Vector(handw,handl+20,0))
-    Sketch_obj.trim(2,App.Vector(0,handl+20,0))
-    Sketch_obj.trim(3,App.Vector(handw/2,handl,0))
-
+    Sketch_obj.trim(2,App.Vector(handw/2, handl+40, 0))
+    Sketch_obj.trim(1,App.Vector(handw,   handl+20, 0))
+    Sketch_obj.trim(2,App.Vector(0,       handl+20, 0))
+    Sketch_obj.trim(3,App.Vector(handw/2, handl,    0))
+    return Sketch_obj
 
 # pads a sketch
-def create_Pad(BodyLabel, SketchLabel, PadLabel):
+def create_Pad(label):
+    BodyLabel   = 'Body_' + label
+    SketchLabel = 'Sketch_' + label
+    PadLabel    = 'Pad_' + label
     # create Pad Object
     Pad_obj = doc.getObject(BodyLabel).newObject('PartDesign::Pad',PadLabel)
     Pad_obj.Profile = doc.getObject(SketchLabel)
@@ -145,7 +153,11 @@ def create_Pad(BodyLabel, SketchLabel, PadLabel):
     return Pad_obj
 
 # rounds some corners 
-def create_Fillet(BodyLabel, FilletLabel, IFilletLabel, PadLabel):
+def create_Fillet(label):
+    BodyLabel    = 'Body_'    + label
+    FilletLabel  = 'Fillet_'  + label
+    IFilletLabel = 'IFillet_' + label
+    PadLabel     = 'Pad_'     + label
     # first Fillet the bottom
     # find bottom edges
     bottom_edges = []
@@ -173,27 +185,39 @@ def create_Fillet(BodyLabel, FilletLabel, IFilletLabel, PadLabel):
     doc.recompute()
     return Fillet_vertical
 
+# spoons
+Sketch_spoon13 = create_spoon_Sketch('spoon13', spoon13_handw, spoon13_handl, spoon13_bowlw, spoon13_bowll)
+Pad_spoon13 = create_Pad('spoon13')
+Fillet_spoon13 = create_Fillet('spoon13')
 
-# 14 spoon
-Body_spoon13 = doc.addObject("PartDesign::Body", "Body_spoon13")
-Sketch_spoon13 = create_spoon_Sketch('Body_spoon13','Sketch_spoon13', spoon13_handw, spoon13_handl, spoon13_bowlw, spoon13_bowll)
-Pad_spoon13 = create_Pad('Body_spoon13','Sketch_spoon13','Pad_spoon13')
-Fillet_spoon13 = create_Fillet('Body_spoon13','Fillet_spoon13','IFillet_spoon13','Pad_spoon13')
+Sketch_spoon15 = create_spoon_Sketch('spoon15', spoon15_handw, spoon15_handl, spoon15_bowlw, spoon15_bowll)
+Pad_spoon15 = create_Pad('spoon15')
+Fillet_spoon15 = create_Fillet('spoon15')
 
-Body_spoon15 = doc.addObject("PartDesign::Body", "Body_spoon15")
-Sketch_spoon15 = create_spoon_Sketch('Body_spoon15','Sketch_spoon15', spoon15_handw, spoon15_handl, spoon15_bowlw, spoon15_bowll)
-Pad_spoon15 = create_Pad('Body_spoon15','Sketch_spoon15','Pad_spoon15')
-Fillet_spoon15 = create_Fillet('Body_spoon15','Fillet_spoon15','IFillet_spoon15','Pad_spoon15')
+Sketch_spoon18 = create_spoon_Sketch('spoon18', spoon18_handw, spoon18_handl, spoon18_bowlw, spoon18_bowll)
+Pad_spoon18 = create_Pad('spoon18')
+Fillet_spoon18 = create_Fillet('spoon18')
 
-Body_spoon18 = doc.addObject("PartDesign::Body", "Body_spoon18")
-Sketch_spoon18 = create_spoon_Sketch('Body_spoon18','Sketch_spoon18', spoon18_handw, spoon18_handl, spoon18_bowlw, spoon18_bowll)
-Pad_spoon18 = create_Pad('Body_spoon18','Sketch_spoon18','Pad_spoon18')
-Fillet_spoon18 = create_Fillet('Body_spoon18','Fillet_spoon18','IFillet_spoon18','Pad_spoon18')
+Sketch_spoon21 = create_spoon_Sketch('spoon21', spoon21_handw, spoon21_handl, spoon21_bowlw, spoon21_bowll)
+Pad_spoon21 = create_Pad('spoon21')
+Fillet_spoon21 = create_Fillet('spoon21')
 
-Body_spoon21 = doc.addObject("PartDesign::Body", "Body_spoon21")
-Sketch_spoon21 = create_spoon_Sketch('Body_spoon21','Sketch_spoon21', spoon21_handw, spoon21_handl, spoon21_bowlw, spoon21_bowll)
-Pad_spoon21 = create_Pad('Body_spoon21','Sketch_spoon21','Pad_spoon21')
-Fillet_spoon21 = create_Fillet('Body_spoon21','Fillet_spoon21','IFillet_spoon21','Pad_spoon21')
+# forks
+Sketch_fork14 = create_fork_Sketch('fork14',fork14_handw, fork14_handl, fork14_tinew, fork14_tinel)
+Pad_fork14 = create_Pad('fork14')
+Fillet_fork14 = create_Fillet('fork14')
+
+Sketch_fork15 = create_fork_Sketch('fork15',fork15_handw, fork15_handl, fork15_tinew, fork15_tinel)
+Pad_fork15 = create_Pad('fork15')
+Fillet_fork15 = create_Fillet('fork15')
+
+Sketch_fork18 = create_fork_Sketch('fork18',fork18_handw, fork18_handl, fork18_tinew, fork18_tinel)
+Pad_fork18 = create_Pad('fork18')
+Fillet_fork18 = create_Fillet('fork18')
+
+Sketch_fork15 = create_fork_Sketch('fork20',fork20_handw, fork20_handl, fork20_tinew, fork20_tinel)
+Pad_fork15 = create_Pad('fork20')
+Fillet_fork15 = create_Fillet('fork20')
 
 # separating the objects
 rotation = App.Rotation(0, 0, 0)
@@ -205,35 +229,6 @@ position = App.Vector(200, 0, 0)
 doc.getObject('Sketch_spoon18').Placement = FreeCAD.Placement(position, rotation) 
 position = App.Vector(300, 0, 0)
 doc.getObject('Sketch_spoon21').Placement = FreeCAD.Placement(position, rotation) 
-
-# create fillet-ed pads for the four fork sizes
-# 14 fork
-Body_fork14 = doc.addObject("PartDesign::Body", "Body_fork14")
-Sketch_fork14 = create_fork_Sketch('Body_fork14','Sketch_fork14',fork14_handw, fork14_handl, fork14_tinew, fork14_tinel)
-Pad_fork14 = create_Pad('Body_fork14','Sketch_fork14','Pad_fork14')
-Fillet_fork14 = create_Fillet('Body_fork14','Fillet_fork14','IFillet_fork14','Pad_fork14')
-
-# 15 fork
-Body_fork15 = doc.addObject("PartDesign::Body", "Body_fork15")
-Sketch_fork15 = create_fork_Sketch('Body_fork15','Sketch_fork15',fork15_handw, fork15_handl, fork15_tinew, fork15_tinel)
-Pad_fork15 = create_Pad('Body_fork15','Sketch_fork15','Pad_fork15')
-Fillet_fork15 = create_Fillet('Body_fork15','Fillet_fork15','IFillet_fork15','Pad_fork15')
-
-# 18 fork
-Body_fork18 = doc.addObject("PartDesign::Body", "Body_fork18")
-Sketch_fork18 = create_fork_Sketch('Body_fork18','Sketch_fork18',fork18_handw, fork18_handl, fork18_tinew, fork18_tinel)
-Pad_fork18 = create_Pad('Body_fork18','Sketch_fork18','Pad_fork18')
-Fillet_fork18 = create_Fillet('Body_fork18','Fillet_fork18','IFillet_fork18','Pad_fork18')
-
-# 20 fork
-Body_fork15 = doc.addObject("PartDesign::Body", "Body_fork20")
-Sketch_fork15 = create_fork_Sketch('Body_fork20','Sketch_fork20',fork20_handw, fork20_handl, fork20_tinew, fork20_tinel)
-Pad_fork15 = create_Pad('Body_fork20','Sketch_fork20','Pad_fork20')
-Fillet_fork15 = create_Fillet('Body_fork20','Fillet_fork20','IFillet_fork20','Pad_fork20')
-
-
-# separating the objects
-rotation = App.Rotation(0, 0, 0)
 position = App.Vector(0, 300, 0)
 doc.getObject('Sketch_fork14').Placement = FreeCAD.Placement(position, rotation) 
 position = App.Vector(100, 300, 0)
